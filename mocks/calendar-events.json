@@ -1,0 +1,108 @@
+{
+  "README": [
+    "Google カレンダー未接続のときに使うダミー予定。自由に書き換えてよい。",
+    "時刻はすべて『対象日（今日）』からの相対指定なので、いつ開いても今日の予定として現れる。",
+    "",
+    "書式:",
+    "  id                 必須。一意な文字列",
+    "  summary            予定名。省略すると (タイトルなし) になる",
+    "  start / end        'HH:mm'。allDay でなければ必須",
+    "  startOffsetDays    対象日を 0 とした相対日数。前日から始まるなら -1（既定 0）",
+    "  endOffsetDays      同上。翌日まで続くなら 1（既定 0）",
+    "  allDay             true にすると終日予定。start / end は無視される",
+    "  status             'confirmed' | 'tentative' | 'cancelled'（既定 confirmed）",
+    "  transparency       'transparent' にすると Google 上の『予定なし』扱い",
+    "  attendees          self: true が自分。responseStatus: 'declined' で辞退",
+    "  note               人間向けメモ。アプリは無視する"
+  ],
+  "events": [
+    {
+      "id": "class-english",
+      "summary": "英語の授業",
+      "start": "09:00",
+      "end": "10:30",
+      "note": "ごく普通の予定"
+    },
+    {
+      "id": "meeting-team",
+      "summary": "チーム定例",
+      "start": "13:00",
+      "end": "14:00",
+      "note": "次の面談と重なる。マージされて 13:00-15:00 の1ブロックになるはず"
+    },
+    {
+      "id": "meeting-review",
+      "summary": "面談",
+      "start": "13:30",
+      "end": "15:00",
+      "note": "チーム定例と重複"
+    },
+    {
+      "id": "meeting-client",
+      "summary": "クライアント打ち合わせ",
+      "start": "16:00",
+      "end": "17:00",
+      "attendees": [
+        { "email": "me@example.com", "self": true, "responseStatus": "accepted" },
+        { "email": "someone@example.com", "responseStatus": "declined" }
+      ],
+      "note": "他人が辞退しているだけ。自分は参加するので残る"
+    },
+    {
+      "id": "seminar-cancelled",
+      "summary": "中止になった説明会",
+      "status": "cancelled",
+      "start": "11:00",
+      "end": "12:00",
+      "note": "除外されるべき（status: cancelled）"
+    },
+    {
+      "id": "birthday-reminder",
+      "summary": "友人の誕生日",
+      "transparency": "transparent",
+      "start": "00:00",
+      "endOffsetDays": 1,
+      "end": "00:00",
+      "note": "除外されるべき（transparency: transparent）。除外に失敗すると一日が全部埋まる"
+    },
+    {
+      "id": "party-declined",
+      "summary": "行かない懇親会",
+      "start": "18:00",
+      "end": "20:00",
+      "attendees": [{ "email": "me@example.com", "self": true, "responseStatus": "declined" }],
+      "note": "除外されるべき（自分が declined）"
+    },
+    {
+      "id": "vacation-allday",
+      "summary": "夏季休暇",
+      "allDay": true,
+      "note": "設定の include_all_day が false なら除外、true なら上部の帯に出る"
+    },
+    {
+      "id": "nightshift-prev",
+      "summary": "深夜シフト",
+      "startOffsetDays": -1,
+      "start": "22:00",
+      "end": "02:00",
+      "note": "前日から続く予定。今日の 00:00-02:00 に切り取られるはず"
+    },
+    {
+      "id": "nightbus-next",
+      "summary": "夜行バス移動",
+      "start": "23:00",
+      "endOffsetDays": 1,
+      "end": "06:00",
+      "note": "翌日へ続く予定。今日の 23:00-24:00 に切り取られるはず"
+    },
+    {
+      "id": "future-out-of-range",
+      "summary": "3日後の予定",
+      "startOffsetDays": 3,
+      "start": "09:00",
+      "endOffsetDays": 3,
+      "end": "10:00",
+      "note": "今日と重ならないので、そもそも取得結果に現れないはず"
+    }
+  ]
+}
