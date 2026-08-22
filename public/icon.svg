@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="一日スケジュール">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <!-- 一日の帯。上から順に 予定・ルーティン・タスク・休憩 -->
+  <rect x="112" y="104" width="288" height="64" rx="20" fill="#94a3b8"/>
+  <rect x="112" y="192" width="200" height="64" rx="20" fill="#60a5fa"/>
+  <rect x="112" y="280" width="256" height="64" rx="20" fill="#fbbf24"/>
+  <rect x="112" y="368" width="144" height="40" rx="16" fill="#34d399"/>
+  <!-- 現在時刻の線 -->
+  <rect x="80" y="248" width="352" height="8" rx="4" fill="#f87171"/>
+  <circle cx="88" cy="252" r="16" fill="#f87171"/>
+</svg>

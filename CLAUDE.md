@@ -16,14 +16,22 @@ Google カレンダーの確定予定を土台に、入れてはいけない時�
 |---|---|---|
 | 0 | Next.js 雛形、スキーマ用意 | 完了 |
 | 1 | ログイン → 当日の予定を一覧表示 | 完了（モックモードで動作） |
-| 2 | 設定・ブロック時間帯の CRUD、RLS 確認 | 未着手 |
-| 3a | ルーティン CRUD | 未着手 |
-| 3b | 配置アルゴリズム + タイムライン UI | 未着手 |
-| 3c | ドラッグ移動、ピン留め、再計算、完了チェック | 未着手 |
-| 3.5 | ドッグフーディング1週間 | 未着手 |
-| 4〜6 | 繰り越し、AI 分解、PWA、デプロイ | 未着手 |
+| 2 | 設定・ブロック時間帯の CRUD | 完了（RLS の確認は Supabase 未作成のため未実施） |
+| 3a | ルーティン CRUD（停止・論理削除・複製・範囲選択 UI） | 完了 |
+| 3b | 配置アルゴリズム + タイムライン UI | 完了 |
+| 3c | ドラッグ移動、ピン留め、再計算、完了チェック | 完了 |
+| 4 | 繰り越し確認ダイアログ、実測記録と estimate_factor 補正 | 完了 |
+| 5 | Claude API によるタスク分解 | 完了（キー未設定でも手入力は動く） |
+| 6 | PWA 化、Vercel デプロイ | PWA 完了／デプロイは要アカウント |
+| **3.5** | **ドッグフーディング1週間** | **← 次はここ** |
 
 Google Cloud と Supabase は**まだ未設定**。そのためアプリはモックモードで動いている。
+
+機能はひととおり揃った。**残っているのは実際に使うことだけ。**
+PLAN.md 8章はドッグフーディングを Phase 4 の前に置いているが、実装を先に終えた。
+順序を入れ替えただけで、省いてはいない。**1週間使ってから次に触ること。**
+毎日 (1)生成にかかった時間 (2)達成率 (3)手動修正の回数と内容 を記録する。
+手動修正が特定のパターンに集中していたら、それは配置ロジックの欠陥。先にそちらを直す。
 
 ---
 
@@ -41,6 +49,26 @@ Google Cloud と Supabase は**まだ未設定**。そのためアプリはモ�
 3. **モックモードを追加した。**
    PLAN.md には無い仕組み。外部サービス未設定でも配置ロジックと UI を検証できるようにするため。
    実データに切り替わったら消すのではなく、**回帰確認用に残す**。
+
+4. **ユーザーデータの保存先は当面 JSON ファイル（`data/store.json`）。**
+   Supabase が無くても一日を組めるようにするため。`supabase/migrations/0001_init.sql` の
+   スキーマと同じ形を保っているので、差し替えは `src/lib/store/index.ts` の中身だけで済む。
+   `data/` は `.gitignore` 済み。
+
+5. **ブロック時間帯の日跨ぎは「前日ぶんの朝」も塞ぐ。**
+   23:00–07:00 の睡眠を登録したとき、当日の 23:00–24:00 だけでなく 00:00–07:00 も埋める。
+   これを落とすと睡眠中の朝にルーティンが置かれる（実際に一度そうなった）。
+   曜日指定つきの場合、朝の部分は**前日**が対象曜日のときだけ効く。
+
+6. **estimate_factor の補正は自動適用しない。**
+   PLAN.md 8章は「実測記録と estimate_factor 補正」としか書いていない。
+   実測から中央値を出して**提案**し、押されたときだけ設定に入れる方式にした。
+   配置結果が黙って変わるのが、この手の補正で一番困る事故なので。
+
+7. **Service Worker は HTML をキャッシュしない。**
+   ページにはカレンダーの予定内容が載っており、PLAN.md 3.1 は保存を禁じている。
+   Cache Storage に入れればそれは端末への保存にあたる。
+   `public/sw.js` が扱うのは静的ファイルだけ。**オフラインで一日を組む機能は無い。**
 
 ---
 
@@ -68,7 +96,19 @@ npm test           # Vitest（配置ロジックのテスト。省略しない�
 npm run test:watch
 npm run build      # 本番ビルド。型チェックも走る
 npx eslint .       # Lint
+node scripts/generate-icons.mjs   # アイコンを描き直したとき
 ```
+
+### 環境変数
+
+| 変数 | 用途 |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 揃うと live モードに入る |
+| `SUPABASE_SERVICE_ROLE_KEY` | サーバー専用。`NEXT_PUBLIC_` を付けない（PLAN.md 10.3） |
+| `ANTHROPIC_API_KEY` | AI 分解。無ければボタンが無効になるだけ |
+| `ANTHROPIC_BASE_URL` | 動作確認用にスタブへ向ける。通常は未設定 |
+| `APP_MODE=mock` | 環境変数が揃っていても強制的にモックで動かす |
+| `SCHEDULE_DATA_FILE` | JSON の保存先を移す |
 
 ---
 
@@ -78,23 +118,52 @@ npx eslint .       # Lint
 PLAN.md                        要件定義（正）
 CLAUDE.md                      このファイル
 mocks/calendar-events.json     ダミー予定。相対日指定なのでいつ開いても「今日」に出る
+data/store.json                ユーザーデータの保存先（gitignore 済み。消せば初期状態に戻る）
+public/icon.svg                アイコンの原本。PNG は scripts/generate-icons.mjs で作る
+public/sw.js                   Service Worker（静的ファイルだけ。HTML は触らない）
+scripts/generate-icons.mjs     icon.svg → PNG（192/512/apple-touch）
 supabase/migrations/           DB スキーマ。Supabase の SQL Editor に貼って適用する
 tests/                         Vitest
 src/
   app/
-    page.tsx                   今日の予定
+    page.tsx                   今日のタイムライン
+    actions.ts                 組み直し・ピン留め・ドラッグ移動・当日スキップ
+    manifest.ts                PWA マニフェスト
+    settings/                  設定とブロック時間帯（PLAN.md 7.5）
+    routines/                  ルーティン CRUD（PLAN.md 7.4）
+    tasks/                     タスク CRUD と AI 分解（PLAN.md 7.3）
     login/page.tsx             ログイン（live のみ。mock では / へ素通り）
     auth/callback/route.ts     Google からの戻り先
     api/calendar/today/        予定取得 API（クライアント側から再取得する用）
   components/
-    day-view.tsx               予定の表示
+    timeline.tsx               ★タイムライン。ドラッグ移動・完了・スキップ
+    carryover-dialog.tsx       繰り越し確認（PLAN.md 7.2）
+    task-paste.tsx             まとめて貼り付け → AI 分解 → 確認画面
+    service-worker.tsx         sw.js の登録（本番のみ）
+    window-picker.tsx          許可時間帯の横棒（PLAN.md 7.4 の必須要件）
+    routine-form.tsx           ルーティンの追加・編集
+    weekday-picker.tsx         曜日の選択
+    skipped-routines.tsx       当日スキップの取り消し
+    day-view.tsx               予定の一覧表示（Phase 1 の名残。API の確認用）
     mode-banner.tsx            モックモードの警告
     ui/                        shadcn/ui。手で編集しない
   lib/
     app-mode.ts                live / mock の判定
     auth.ts                    getCurrentUser()
-    settings.ts                app_settings の既定値（Phase 2 で DB 化）
+    session.ts                 requireSession()。画面と Server Action の入口
+    domain.ts                  テーブルに対応するアプリ内の型
+    carryover.ts               繰り越し候補の抽出と、確認を出すかの判定
+    estimate.ts                実測から estimate_factor を割り出す
+    decompose.ts               AI の応答 → タスク候補（当てにせず検証する）
+    ai/claude.ts               Claude API の呼び出し。server-only
+    settings.ts                app_settings の既定値
+    form.ts                    FormData の読み取り
     format.ts                  時刻・所要時間の表示
+    day-plan.ts                カレンダー＋保存データ→画面用のデータに束ねる
+    timeline-layout.ts         重なる項目の列割り当て
+    store/
+      index.ts                 ★読み書きの窓口。Supabase 版への差し替え点
+      file-db.ts               JSON ファイルの入出力と書き込みの直列化
     supabase/                  クライアント生成
     calendar/
       types.ts                 Raw / Normalized の型
@@ -104,6 +173,15 @@ src/
       mock.ts                  モック定義 → Raw 形式への変換
       index.ts                 live / mock を束ねる入口
       dto.ts                   JSON 受け渡し用の変換
+    planner/
+      index.ts                 ★buildPlan。6章の全体の流れと緩和案
+      time.ts                  'HH:mm' ↔ 00:00 からの分
+      intervals.ts             区間の差集合・積集合
+      blocked.ts               ブロック時間帯 → 区間
+      routines.ts              ルーティンの配置順と配置、保存前の検証
+      tasks.ts                 タスクの配置順と Best-Fit
+      breaks.ts                休憩の挿入
+      now.ts                   現在時刻（配置ロジック本体は現在時刻を読まない）
   proxy.ts                     Supabase セッションの更新（live のみ）
 ```
 
@@ -131,6 +209,25 @@ PLAN.md 3.3。**すべてのソートの最終比較キーに `id` を含める�
 呼んだ結果と同じ状態）。終日予定を「当日いっぱい」として扱えるのはこの前提による。
 モック側では `materializeMockEvents` が同じ絞り込みを行っている。
 
+### 6. 配置ロジックは現在時刻を読まない
+`buildPlan` の中で `new Date()` を呼ばない。再計算の基準時刻は `fromMinutes` として
+外から渡す。これを守らないと「同じ入力なら同じ出力」がテストできなくなる。
+
+### 7. 画面と配置で同じ関数を使う
+タイムラインに出す区間と、空き時間の計算に使う区間は同じ関数から作る
+（例: `blockedSpansForDate`）。別々に書くと「画面には出ていないのに置けない」ずれが出る。
+
+### 8. `<input type="number">` に `step` を安易に付けない
+`min={1} step={5}` と書くと、ブラウザが認めるのは 1, 6, 11… だけになる。
+30 のような値が「不正」と判定され、**submit が何のエラーも出さずに黙って止まる**。
+実際にこれで AI 分解の保存が動かなくなった（原因究明に時間を取られた）。
+分は 1 刻み、係数は 0.01 刻みにしてある。値の刻みを制限したくなったらサーバー側で丸めること。
+
+### 9. AI が落ちても手入力は動く
+PLAN.md 8章 Phase 5 の完了条件。`decomposeTasks` は例外を投げず、
+理由つきの結果を返す。キーが無ければボタンを無効にして理由を出すだけで、
+`/tasks` の手入力フォームには一切影響させない。
+
 ---
 
 ## 作業の進め方
@@ -141,6 +238,7 @@ PLAN.md 3.3。**すべてのソートの最終比較キーに `id` を含める�
   React コンポーネントにロジックを埋め込まない。
 - `npm test` と `npm run build` が両方通る状態を保つ。警告も残さない。
 - ファイルを消す前に必ず確認を取る。整理は削除より移動を優先。
+- 画面の確認はブラウザで実際に触って行う。テストが通ることと、使えることは別。
 
 ---
 

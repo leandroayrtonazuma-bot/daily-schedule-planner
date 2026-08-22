@@ -46,3 +46,6 @@ next-env.d.ts
 # Windows
 Thumbs.db
 desktop.ini
+
+# ローカルの保存データ（設定・ルーティン・タスク・計画）
+/data/
