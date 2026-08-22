@@ -82,19 +82,30 @@ export function userData(db: Database, userId: string): UserData {
   return created;
 }
 
-function dataFilePath(): string {
-  // 既定は data/ の下に固定する。ここを動的にすると
-  // Turbopack がプロジェクト全体を成果物に含めてしまう
+/**
+ * Vercel の関数実行環境は /var/task 以下が読み取り専用で、
+ * data/ を作ろうとすると ENOENT で落ちる（実際にデプロイして確認した）。
+ * 書き込めるのは /tmp だけなので、そこに逃がす。
+ *
+ * ただし /tmp は関数インスタンスが入れ替わると消える。モックモードは
+ * 「外部サービス未設定でも動作確認できる」ためのものなので、Vercel 上での
+ * 揮発性は許容する（本気で使うなら Supabase に切り替える）。
+ */
+export function resolveDataFilePath(): string {
   const override = process.env.SCHEDULE_DATA_FILE;
   if (override) return resolve(/* turbopackIgnore: true */ override);
 
+  if (process.env.VERCEL) return join('/tmp', DATA_DIRECTORY, DEFAULT_FILE);
+
+  // 既定は data/ の下に固定する。ここを動的にすると
+  // Turbopack がプロジェクト全体を成果物に含めてしまう
   return join(process.cwd(), DATA_DIRECTORY, DEFAULT_FILE);
 }
 
 async function readDatabase(): Promise<Database> {
   try {
     // 保存先はユーザーが決める1ファイルだけ。追跡対象を広げる必要はない
-    const raw = await readFile(/* turbopackIgnore: true */ dataFilePath(), 'utf8');
+    const raw = await readFile(/* turbopackIgnore: true */ resolveDataFilePath(), 'utf8');
     const parsed = JSON.parse(raw) as Partial<Database>;
 
     return { version: 1, users: parsed.users ?? {} };
@@ -105,7 +116,7 @@ async function readDatabase(): Promise<Database> {
 }
 
 async function writeDatabase(db: Database): Promise<void> {
-  const path = dataFilePath();
+  const path = resolveDataFilePath();
   await mkdir(dirname(path), { recursive: true });
 
   // 書き込み中に落ちてもファイルが壊れないよう、一時ファイル経由で差し替える

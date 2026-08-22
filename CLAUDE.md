@@ -109,6 +109,17 @@ node scripts/generate-icons.mjs   # アイコンを描き直したとき
 | `ANTHROPIC_BASE_URL` | 動作確認用にスタブへ向ける。通常は未設定 |
 | `APP_MODE=mock` | 環境変数が揃っていても強制的にモックで動かす |
 | `SCHEDULE_DATA_FILE` | JSON の保存先を移す |
+| `VERCEL` | Vercel が自動で立てる。モックモードの保存先を `/tmp` に切り替える（下記） |
+
+### Vercel にモックモードのままデプロイする場合
+
+Vercel の関数実行環境は `/var/task` 以下が読み取り専用で、`data/store.json` を
+作ろうとすると `ENOENT: no such file or directory, mkdir '/var/task/data'` で落ちる。
+**実際にデプロイして踏んだ。**
+
+`file-db.ts` の `resolveDataFilePath()` が `VERCEL` 環境変数を見て `/tmp` に逃がすので、
+モックモードなら追加設定なしでそのまま動く。ただし `/tmp` は関数インスタンスが
+入れ替わると消える揮発性のストレージ。**動作確認以上の用途では Supabase に切り替えること。**
 
 ---
 
