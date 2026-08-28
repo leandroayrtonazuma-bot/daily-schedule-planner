@@ -16,16 +16,25 @@ Google カレンダーの確定予定を土台に、入れてはいけない時�
 |---|---|---|
 | 0 | Next.js 雛形、スキーマ用意 | 完了 |
 | 1 | ログイン → 当日の予定を一覧表示 | 完了（モックモードで動作） |
-| 2 | 設定・ブロック時間帯の CRUD | 完了（RLS の確認は Supabase 未作成のため未実施） |
+| 2 | 設定・ブロック時間帯の CRUD | 完了（RLS は Supabase 上で有効化を確認済み） |
 | 3a | ルーティン CRUD（停止・論理削除・複製・範囲選択 UI） | 完了 |
 | 3b | 配置アルゴリズム + タイムライン UI | 完了 |
 | 3c | ドラッグ移動、ピン留め、再計算、完了チェック | 完了 |
 | 4 | 繰り越し確認ダイアログ、実測記録と estimate_factor 補正 | 完了 |
 | 5 | Claude API によるタスク分解 | 完了（キー未設定でも手入力は動く） |
-| 6 | PWA 化、Vercel デプロイ | PWA 完了／デプロイは要アカウント |
+| 6 | PWA 化、Vercel デプロイ | 完了（<https://daily-schedule-planner-ten.vercel.app>） |
 | **3.5** | **ドッグフーディング1週間** | **← 次はここ** |
 
-Google Cloud と Supabase は**まだ未設定**。そのためアプリはモックモードで動いている。
+Google Cloud と Supabase は**設定済み**（2026-08-28）。ローカルは `.env.local` があるので live モード。
+本番（Vercel）は環境変数を入れるまでモックモードのままなので注意。
+
+| 項目 | 値 |
+|---|---|
+| Supabase プロジェクト | `daily-schedule-planner` / ref `ebwhxlumwngnokmnpvdw`（Tokyo, Free） |
+| Supabase URL | `https://ebwhxlumwngnokmnpvdw.supabase.co` |
+| GCP プロジェクト | `daily-schedule-planner-506708` |
+| OAuth クライアント | `supabase-auth`（ウェブアプリケーション） |
+| コールバック URL | `https://ebwhxlumwngnokmnpvdw.supabase.co/auth/v1/callback` |
 
 機能はひととおり揃った。**残っているのは実際に使うことだけ。**
 PLAN.md 8章はドッグフーディングを Phase 4 の前に置いているが、実装を先に終えた。
@@ -50,10 +59,11 @@ PLAN.md 8章はドッグフーディングを Phase 4 の前に置いている�
    PLAN.md には無い仕組み。外部サービス未設定でも配置ロジックと UI を検証できるようにするため。
    実データに切り替わったら消すのではなく、**回帰確認用に残す**。
 
-4. **ユーザーデータの保存先は当面 JSON ファイル（`data/store.json`）。**
-   Supabase が無くても一日を組めるようにするため。`supabase/migrations/0001_init.sql` の
-   スキーマと同じ形を保っているので、差し替えは `src/lib/store/index.ts` の中身だけで済む。
-   `data/` は `.gitignore` 済み。
+4. **ユーザーデータの保存先はモードで切り替える。**
+   live は Supabase（`src/lib/store/supabase-store.ts`）、mock は JSON ファイル
+   （`data/store.json` / `src/lib/store/file-store.ts`）。呼び分けは `src/lib/store/index.ts` の
+   `impl()` だけが行い、画面と Server Actions はモードを意識しない。
+   両者は同じ関数シグネチャを保つこと。`data/` は `.gitignore` 済み。
 
 5. **ブロック時間帯の日跨ぎは「前日ぶんの朝」も塞ぐ。**
    23:00–07:00 の睡眠を登録したとき、当日の 23:00–24:00 だけでなく 00:00–07:00 も埋める。
@@ -269,13 +279,32 @@ PLAN.md 8章 Phase 5 の完了条件。`decomposeTasks` は例外を投げず、
 
 ### Supabase
 1. プロジェクトを作成
-2. `supabase/migrations/0001_init.sql` を SQL Editor で実行
+2. `supabase/migrations/` の SQL を**番号順にすべて** SQL Editor で実行する
+   （現在は `0001_init.sql` と `0002_carryover_prompted_on.sql` の2本。`0001` だけでは
+   `app_settings.carryover_prompted_on` が無く、繰り越し確認が動かない）
 3. Authentication → Providers → Google を有効化し、上で作ったクライアント ID / シークレットを入れる
-4. Authentication → URL Configuration の Redirect URLs に `http://localhost:3000/auth/callback` を追加
+4. Authentication → URL Configuration の Redirect URLs に
+   `http://localhost:3000/**` と本番 URL の `/**` を追加
 5. `.env.local.example` を `.env.local` にコピーして URL と anon key を入れる
+
+> **Google のクライアントシークレットは作成直後のダイアログでしか表示されない。**
+> 閉じてしまったら再表示はできないので、クライアント詳細から新しいシークレットを追加し直す。
 
 ### 動作確認
 `npm run dev` → モックバナーが消え、ログイン画面が出れば live モードに入っている。
+
+---
+
+## 本番（Vercel）
+
+GitHub の `main` に push すると自動でデプロイされる。URL は
+<https://daily-schedule-planner-ten.vercel.app>。
+
+**本番を live モードにするには Vercel 側にも環境変数が要る**
+（Project → Settings → Environment Variables に `NEXT_PUBLIC_SUPABASE_URL` と
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` を Production / Preview / Development すべてに登録 → Redeploy）。
+入れるまではモックモードのまま動くので、**本番を見て「動いている」と判断しないこと。**
+判別はモックバナーの有無で行う。
 
 ---
 
@@ -283,6 +312,11 @@ PLAN.md 8章 Phase 5 の完了条件。`decomposeTasks` は例外を投げず、
 
 - **OAuth の7日問題**（PLAN.md 10.1）: 同意画面が「テスト」状態だとリフレッシュトークンが7日で失効する。
   `CalendarAuthError` を投げて再ログインを促すところまでは実装済み。サイレントに止めないこと。
-- `provider_token` は Supabase のセッション Cookie に入る。Phase 2 以降でトークンの
-  リフレッシュ運用（PLAN.md 10.3 の暗号化保存）を詰める必要がある。
+- **リフレッシュトークンは自前で保存していない。** Google のアクセストークンは
+  Supabase セッションの `provider_token` から都度取るだけ（`src/lib/auth.ts`）。
+  PLAN.md 10.3 の「暗号化して保存する」は、**保存しないことで満たしている**。
+  自前の保存を足したくなったら、暗号化とセットでなければ入れないこと。
+  ただしこの方式には未検証の点がある: Supabase がセッションを更新したあとも
+  `provider_token` が残るかはドッグフーディングで確かめる。消えるなら
+  カレンダーが読めなくなり `CalendarWarning` が出る。**出たら記録すること。**
 - `src/components/ui/` は shadcn/ui が生成したもの。原則手で編集せず、`npx shadcn@latest add` で足す。
