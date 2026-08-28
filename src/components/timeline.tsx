@@ -6,7 +6,7 @@ import { movePlanItemAction, togglePinAction, toggleRoutineSkipAction } from '@/
 import { setTaskStatusAction } from '@/app/tasks/actions';
 import type { TimelineEntry } from '@/lib/day-plan';
 import { formatDuration } from '@/lib/format';
-import { formatMinutes } from '@/lib/planner/time';
+import { formatMinutes, type Minutes } from '@/lib/planner/time';
 import { layoutTimeline } from '@/lib/timeline-layout';
 import { cn } from '@/lib/utils';
 
@@ -52,6 +52,17 @@ export function Timeline({
   const [drag, setDrag] = useState<{ key: string; offset: number } | null>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * 離した瞬間に置いた位置。サーバーの応答（往復で1秒近くかかる）を待たずに描く。
+   * サーバーから新しい entries が来たら捨てて、正となる位置で描き直す。
+   */
+  const [moved, setMoved] = useState<Record<string, Minutes>>({});
+  const [seenEntries, setSeenEntries] = useState(entries);
+  if (seenEntries !== entries) {
+    setSeenEntries(entries);
+    setMoved({});
+  }
+
   // 稼働時間の外にある予定も隠さずに出す
   const viewStart = Math.min(workStart, ...entries.map((entry) => entry.start), workStart);
   const viewEnd = Math.max(workEnd, ...entries.map((entry) => entry.end), workEnd);
@@ -93,10 +104,14 @@ export function Timeline({
     const raw = viewStart + y / PX_PER_MINUTE;
     const snapped = Math.round(raw / SNAP) * SNAP;
 
-    // 元の位置に戻す。結果はサーバーから返ってきた値で描き直される
-    event.currentTarget.style.top = `${top(entry.start)}px`;
+    if (snapped === entry.start) {
+      // 動かなかったときだけ元の位置に戻す
+      event.currentTarget.style.top = `${top(entry.start)}px`;
+      return;
+    }
 
-    if (snapped === entry.start) return;
+    // 置いた位置のまま描き続ける。サーバーの結果が返ったら差し替わる
+    setMoved((current) => ({ ...current, [entry.key]: Math.max(0, snapped) }));
 
     const form = new FormData();
     form.set('date', date);
@@ -142,7 +157,7 @@ export function Timeline({
   }
 
   return (
-    <div className={cn('relative', pending && 'opacity-70 transition-opacity')}>
+    <div className="relative">
       <div className="relative" style={{ height }}>
         <HourGrid viewStart={viewStart} viewEnd={viewEnd} workStart={workStart} workEnd={workEnd} />
 
@@ -159,6 +174,8 @@ export function Timeline({
           {laid.map((entry) => {
             const movable = MOVABLE.has(entry.kind);
             const minutes = entry.end - entry.start;
+            const start = moved[entry.key] ?? entry.start;
+            const saving = pending && moved[entry.key] != null;
 
             return (
               <div
@@ -172,15 +189,16 @@ export function Timeline({
                   colorFor(entry),
                   movable ? 'cursor-grab touch-none active:cursor-grabbing' : 'cursor-default',
                   drag?.key === entry.key && 'z-30 opacity-80 shadow-lg',
+                  saving && 'z-20 ring-2 ring-foreground/20',
                   entry.status === 'done' && 'opacity-50',
                 )}
                 style={{
-                  top: top(entry.start),
+                  top: top(start),
                   height: Math.max(18, minutes * PX_PER_MINUTE - 2),
                   left: `${(entry.column / entry.columns) * 100}%`,
                   width: `calc(${100 / entry.columns}% - 4px)`,
                 }}
-                title={`${formatMinutes(entry.start)}–${formatMinutes(entry.end)} ${entry.title}`}
+                title={`${formatMinutes(start)}–${formatMinutes(start + minutes)} ${entry.title}`}
               >
                 <div className="flex items-start justify-between gap-1">
                   <span
@@ -222,7 +240,7 @@ export function Timeline({
                 </div>
                 {minutes >= 30 && (
                   <p className="font-mono tabular-nums opacity-70">
-                    {formatMinutes(entry.start)}–{formatMinutes(entry.end)}（
+                    {formatMinutes(start)}–{formatMinutes(start + minutes)}（
                     {formatDuration(minutes)}）
                   </p>
                 )}

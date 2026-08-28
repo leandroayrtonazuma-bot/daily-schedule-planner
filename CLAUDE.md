@@ -300,6 +300,15 @@ PLAN.md 8章 Phase 5 の完了条件。`decomposeTasks` は例外を投げず、
 GitHub の `main` に push すると自動でデプロイされる。URL は
 <https://daily-schedule-planner-ten.vercel.app>。
 
+**`daily-schedule-planner.vercel.app`（`-ten` が付かない方）は別人のプロジェクト。**
+一度取り違えて OAuth と Supabase の設定を誤ったドメインに向けてしまったことがある。
+URL を人に伝えるときは必ず `-ten` まで含めて確認すること。
+
+**Function Region は Tokyo（`hnd1`）に設定済み。** Supabase も同じ ap-northeast-1 なので
+往復が同一リージョン内に収まる。Hobby プランはリージョンを1つしか選べず、切り替え時は
+新しいリージョンにチェックを入れるだけでは古い方が自動で外れない（両方チェックの状態だと
+Save が無効化される）。外し忘れに気づかず「反応しない」と誤認しやすい。
+
 **本番を live モードにするには Vercel 側にも環境変数が要る**
 （Project → Settings → Environment Variables に `NEXT_PUBLIC_SUPABASE_URL` と
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` を Production / Preview / Development すべてに登録 → Redeploy）。
